@@ -52,3 +52,31 @@ class GetAlarmRecommendationsResponse(BaseModel):
         default_factory=list, description='List of alarm recommendations'
     )
     message: str | None = Field(default=None, description='Optional informational message')
+
+
+class NamespaceSummary(BaseModel):
+    """Summary of alarm recommendations for a single namespace."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    namespace: str = Field(..., description='AWS namespace (e.g., AWS/EC2)')
+    total: int = Field(..., description='Total recommendations for this namespace')
+    error_fault: int = Field(default=0, description='Count of error/fault-related recommendations')
+    latency: int = Field(default=0, description='Count of latency-related recommendations')
+    requests: int = Field(default=0, description='Count of request-count-related recommendations')
+    utilization: int = Field(default=0, description='Count of utilization-related recommendations')
+    other: int = Field(default=0, description='Count of uncategorized recommendations')
+
+
+class SummarizeAlarmRecommendationsResponse(BaseModel):
+    """Summarized view of alarm recommendations grouped by namespace."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    generation_status: str = Field(..., description='Status: COMPLETED or IN_PROGRESS')
+    total_recommendations: int = Field(..., description='Total recommendations across all namespaces')
+    total_namespaces: int = Field(..., description='Number of distinct namespaces')
+    namespaces: List[NamespaceSummary] = Field(
+        default_factory=list, description='Per-namespace breakdown'
+    )
+    message: str | None = Field(default=None, description='Optional informational message')

@@ -17,6 +17,8 @@
 from awslabs.cloudwatch_mcp_server.alarm_recommendations.models import (
     AlarmRecommendation,
     GetAlarmRecommendationsResponse,
+    NamespaceSummary,
+    SummarizeAlarmRecommendationsResponse,
 )
 
 
@@ -94,4 +96,117 @@ class TestGetAlarmRecommendationsResponse:
         }
         resp = GetAlarmRecommendationsResponse.model_validate(data)
         assert resp.last_generated_at is None
+        assert resp.message is None
+
+
+class TestNamespaceSummary:
+    """Test cases for NamespaceSummary model."""
+
+    def test_all_fields(self):
+        """Test construction with all fields provided."""
+        summary = NamespaceSummary(
+            namespace='AWS/EC2',
+            total=10,
+            error_fault=2,
+            latency=3,
+            requests=1,
+            utilization=3,
+            other=1,
+        )
+        assert summary.namespace == 'AWS/EC2'
+        assert summary.total == 10
+        assert summary.error_fault == 2
+        assert summary.latency == 3
+        assert summary.requests == 1
+        assert summary.utilization == 3
+        assert summary.other == 1
+
+    def test_default_counts(self):
+        """Test that category counts default to 0."""
+        summary = NamespaceSummary(namespace='AWS/Lambda', total=5)
+        assert summary.error_fault == 0
+        assert summary.latency == 0
+        assert summary.requests == 0
+        assert summary.utilization == 0
+        assert summary.other == 0
+
+    def test_camel_case_alias(self):
+        """Test construction from camelCase keys via model_validate."""
+        data = {
+            'namespace': 'AWS/DynamoDB',
+            'total': 4,
+            'errorFault': 1,
+            'latency': 1,
+            'requests': 1,
+            'utilization': 0,
+            'other': 1,
+        }
+        summary = NamespaceSummary.model_validate(data)
+        assert summary.error_fault == 1
+        assert summary.other == 1
+
+    def test_serialization_camel_case(self):
+        """Test that model_dump with by_alias produces camelCase keys."""
+        summary = NamespaceSummary(namespace='AWS/S3', total=2, error_fault=1, other=1)
+        dumped = summary.model_dump(by_alias=True)
+        assert 'errorFault' in dumped
+        assert 'namespace' in dumped
+        assert dumped['errorFault'] == 1
+
+
+class TestSummarizeAlarmRecommendationsResponse:
+    """Test cases for SummarizeAlarmRecommendationsResponse model."""
+
+    def test_full_construction(self):
+        """Test construction with all fields."""
+        ns = NamespaceSummary(namespace='AWS/EC2', total=3, utilization=2, other=1)
+        resp = SummarizeAlarmRecommendationsResponse(
+            generation_status='COMPLETED',
+            total_recommendations=3,
+            total_namespaces=1,
+            namespaces=[ns],
+            message='All done',
+        )
+        assert resp.generation_status == 'COMPLETED'
+        assert resp.total_recommendations == 3
+        assert resp.total_namespaces == 1
+        assert len(resp.namespaces) == 1
+        assert resp.namespaces[0].namespace == 'AWS/EC2'
+        assert resp.message == 'All done'
+
+    def test_empty_namespaces(self):
+        """Test construction with empty namespaces list."""
+        resp = SummarizeAlarmRecommendationsResponse(
+            generation_status='IN_PROGRESS',
+            total_recommendations=0,
+            total_namespaces=0,
+            namespaces=[],
+        )
+        assert resp.namespaces == []
+        assert resp.message is None
+
+    def test_camel_case_alias(self):
+        """Test construction from camelCase keys via model_validate."""
+        data = {
+            'generationStatus': 'COMPLETED',
+            'totalRecommendations': 5,
+            'totalNamespaces': 2,
+            'namespaces': [
+                {'namespace': 'AWS/EC2', 'total': 3},
+                {'namespace': 'AWS/Lambda', 'total': 2},
+            ],
+        }
+        resp = SummarizeAlarmRecommendationsResponse.model_validate(data)
+        assert resp.total_recommendations == 5
+        assert resp.total_namespaces == 2
+        assert len(resp.namespaces) == 2
+
+    def test_message_defaults_to_none(self):
+        """Test that message defaults to None when not provided."""
+        resp = SummarizeAlarmRecommendationsResponse(
+            generation_status='COMPLETED',
+            total_recommendations=0,
+            total_namespaces=0,
+            namespaces=[],
+        )
         assert resp.message is None
