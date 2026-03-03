@@ -19,8 +19,11 @@ from awslabs.cloudwatch_mcp_server.alarm_recommendations.client import (
 )
 from awslabs.cloudwatch_mcp_server.alarm_recommendations.models import (
     AlarmRecommendation,
+    ApplyAlarmRecommendationResponse,
+    GenerateAlarmRecommendationsResponse,
     GetAlarmRecommendationsResponse,
     NamespaceSummary,
+    OnboardAccountResponse,
     SummarizeAlarmRecommendationsResponse,
 )
 from collections import defaultdict
@@ -54,6 +57,15 @@ class AlarmRecommendationsTools:
         )
         mcp.tool(name='summarize_alarm_recommendations')(
             self.summarize_alarm_recommendations
+        )
+        mcp.tool(name='generate_alarm_recommendations_for_account')(
+            self.generate_alarm_recommendations_for_account
+        )
+        mcp.tool(name='onboard_alarm_recommendations_for_account')(
+            self.onboard_alarm_recommendations_for_account
+        )
+        mcp.tool(name='apply_alarm_recommendation_for_account')(
+            self.apply_alarm_recommendation_for_account
         )
 
     @staticmethod
@@ -182,4 +194,144 @@ class AlarmRecommendationsTools:
         except Exception as e:
             logger.error(f'Error in summarize_alarm_recommendations: {str(e)}')
             await ctx.error(f'Error summarizing alarm recommendations: {str(e)}')
+            raise
+
+    async def generate_alarm_recommendations_for_account(
+        self,
+        ctx: Context,
+        region: Annotated[
+            str | None,
+            Field(
+                description='AWS region to query. Defaults to AWS_REGION environment variable or us-east-1 if not set.'
+            ),
+        ] = None,
+        profile_name: Annotated[
+            str | None,
+            Field(
+                description='AWS CLI Profile Name to use for AWS access. Falls back to AWS_PROFILE environment variable if not specified, or uses default AWS credential chain.'
+            ),
+        ] = None,
+    ) -> GenerateAlarmRecommendationsResponse:
+        """Triggers generation of new alarm recommendations for the account.
+
+        Sends a fire-and-forget request to generate fresh recommendations. The
+        generation runs asynchronously — use get_alarm_recommendations_for_account
+        to retrieve results once generation completes.
+
+        Usage: Call this to refresh recommendations. Then poll
+        get_alarm_recommendations_for_account until generation_status is COMPLETED.
+
+        Args:
+            ctx: The MCP context object for error handling and logging.
+            region: AWS region. Defaults to AWS_REGION env var or us-east-1.
+            profile_name: AWS CLI profile name. Falls back to AWS_PROFILE env var.
+
+        Returns:
+            GenerateAlarmRecommendationsResponse: Status of the generation request.
+        """
+        try:
+            client = AlarmRecommendationsClient(profile_name=profile_name)
+            data = client.call('GenerateAlarmRecommendations', {})
+            return GenerateAlarmRecommendationsResponse.model_validate(data)
+        except Exception as e:
+            logger.error(f'Error in generate_alarm_recommendations_for_account: {str(e)}')
+            await ctx.error(f'Error generating alarm recommendations: {str(e)}')
+            raise
+
+    async def onboard_alarm_recommendations_for_account(
+        self,
+        ctx: Context,
+        region: Annotated[
+            str | None,
+            Field(
+                description='AWS region to query. Defaults to AWS_REGION environment variable or us-east-1 if not set.'
+            ),
+        ] = None,
+        profile_name: Annotated[
+            str | None,
+            Field(
+                description='AWS CLI Profile Name to use for AWS access. Falls back to AWS_PROFILE environment variable if not specified, or uses default AWS credential chain.'
+            ),
+        ] = None,
+    ) -> OnboardAccountResponse:
+        """Onboards the AWS account to the Alarm Recommendations service.
+
+        Registers the account so that alarm recommendations can be generated and
+        retrieved. This is a prerequisite before using generate or get tools.
+
+        Usage: Call this once to onboard the account. Then use
+        generate_alarm_recommendations_for_account to trigger generation.
+
+        Args:
+            ctx: The MCP context object for error handling and logging.
+            region: AWS region. Defaults to AWS_REGION env var or us-east-1.
+            profile_name: AWS CLI profile name. Falls back to AWS_PROFILE env var.
+
+        Returns:
+            OnboardAccountResponse: Account ID and onboarding timestamp.
+        """
+        try:
+            client = AlarmRecommendationsClient(profile_name=profile_name)
+            data = client.call('OnboardAccount', {})
+            return OnboardAccountResponse.model_validate(data)
+        except Exception as e:
+            logger.error(f'Error in onboard_alarm_recommendations_for_account: {str(e)}')
+            await ctx.error(f'Error onboarding account: {str(e)}')
+            raise
+
+    async def apply_alarm_recommendation_for_account(
+        self,
+        ctx: Context,
+        recommendation_id: Annotated[
+            str,
+            Field(description='The ID of the recommendation to apply.'),
+        ],
+        state: Annotated[
+            str,
+            Field(description='Action to take: ACCEPTED (creates the alarm) or DISMISSED.'),
+        ],
+        region: Annotated[
+            str | None,
+            Field(
+                description='AWS region to query. Defaults to AWS_REGION environment variable or us-east-1 if not set.'
+            ),
+        ] = None,
+        profile_name: Annotated[
+            str | None,
+            Field(
+                description='AWS CLI Profile Name to use for AWS access. Falls back to AWS_PROFILE environment variable if not specified, or uses default AWS credential chain.'
+            ),
+        ] = None,
+    ) -> ApplyAlarmRecommendationResponse:
+        """Accepts or dismisses a specific alarm recommendation.
+
+        Applies an action to a recommendation returned by
+        get_alarm_recommendations_for_account. ACCEPTED creates the alarm;
+        DISMISSED marks it as not needed.
+
+        Usage: After reviewing recommendations, call this for each one to accept
+        or dismiss it. The EDITED state is not supported.
+
+        Args:
+            ctx: The MCP context object for error handling and logging.
+            recommendation_id: The recommendation ID to act on.
+            state: Must be ACCEPTED or DISMISSED.
+            region: AWS region. Defaults to AWS_REGION env var or us-east-1.
+            profile_name: AWS CLI profile name. Falls back to AWS_PROFILE env var.
+
+        Returns:
+            ApplyAlarmRecommendationResponse: Confirmation with recommendation ID and state.
+        """
+        if state not in ('ACCEPTED', 'DISMISSED'):
+            raise ValueError(f'state must be ACCEPTED or DISMISSED, got: {state}')
+        try:
+            client = AlarmRecommendationsClient(profile_name=profile_name)
+            data = client.call(
+                'ApplyRecommendation',
+                {'recommendationId': recommendation_id, 'state': state},
+            )
+            return ApplyAlarmRecommendationResponse.model_validate(data)
+        except Exception as e:
+            logger.error(f'Error in apply_alarm_recommendation_for_account: {str(e)}')
+            await ctx.error(f'Error applying alarm recommendation: {str(e)}')
             raise

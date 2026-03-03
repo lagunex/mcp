@@ -80,3 +80,32 @@ class SummarizeAlarmRecommendationsResponse(BaseModel):
         default_factory=list, description='Per-namespace breakdown'
     )
     message: str | None = Field(default=None, description='Optional informational message')
+
+
+class GenerateAlarmRecommendationsResponse(BaseModel):
+    """Response from GenerateAlarmRecommendations."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    status: str = Field(..., description='Generation status (e.g., IN_PROGRESS)')
+    message: str | None = Field(default=None, description='Optional informational message')
+
+
+class OnboardAccountResponse(BaseModel):
+    """Response from OnboardAccount."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    account_id: str = Field(..., description='AWS account ID')
+    onboarded_at: float = Field(..., description='Epoch timestamp of onboarding')
+    message: str | None = Field(default=None, description='Optional informational message')
+
+
+class ApplyAlarmRecommendationResponse(BaseModel):
+    """Response from ApplyRecommendation."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    recommendation_id: str = Field(..., description='ID of the recommendation')
+    state: str = Field(..., description='Applied state: ACCEPTED or DISMISSED')
+    message: str | None = Field(default=None, description='Optional informational message')

@@ -17,7 +17,10 @@
 import pytest
 from awslabs.cloudwatch_mcp_server.alarm_recommendations.models import (
     AlarmRecommendation,
+    ApplyAlarmRecommendationResponse,
+    GenerateAlarmRecommendationsResponse,
     GetAlarmRecommendationsResponse,
+    OnboardAccountResponse,
     SummarizeAlarmRecommendationsResponse,
 )
 from awslabs.cloudwatch_mcp_server.alarm_recommendations.tools import (
@@ -318,12 +321,214 @@ class TestSummarizeAlarmRecommendations:
 class TestToolRegistration:
     """Test that tools are properly registered."""
 
-    def test_summarize_tool_registered(self):
-        """Test summarize_alarm_recommendations is registered."""
+    def test_all_tools_registered(self):
+        """Test all alarm recommendation tools are registered."""
         tools = AlarmRecommendationsTools()
         mock_mcp = Mock()
         mock_mcp.tool.return_value = lambda fn: fn
         tools.register(mock_mcp)
 
         tool_names = [call.kwargs['name'] for call in mock_mcp.tool.call_args_list]
+        assert 'get_alarm_recommendations_for_account' in tool_names
         assert 'summarize_alarm_recommendations' in tool_names
+        assert 'generate_alarm_recommendations_for_account' in tool_names
+        assert 'onboard_alarm_recommendations_for_account' in tool_names
+        assert 'apply_alarm_recommendation_for_account' in tool_names
+
+
+class TestGenerateAlarmRecommendations:
+    """Test cases for generate_alarm_recommendations_for_account tool."""
+
+    @pytest.mark.asyncio
+    @patch('awslabs.cloudwatch_mcp_server.alarm_recommendations.tools.AlarmRecommendationsClient')
+    async def test_success(self, mock_client_cls, mock_context):
+        """Test successful generation trigger."""
+        mock_client = Mock()
+        mock_client.call.return_value = {
+            'status': 'IN_PROGRESS',
+        }
+        mock_client_cls.return_value = mock_client
+
+        tools = AlarmRecommendationsTools()
+        result = await tools.generate_alarm_recommendations_for_account(mock_context)
+
+        assert isinstance(result, GenerateAlarmRecommendationsResponse)
+        assert result.status == 'IN_PROGRESS'
+        mock_client.call.assert_called_once_with('GenerateAlarmRecommendations', {})
+
+    @pytest.mark.asyncio
+    @patch('awslabs.cloudwatch_mcp_server.alarm_recommendations.tools.AlarmRecommendationsClient')
+    async def test_error_handling(self, mock_client_cls, mock_context):
+        """Test that errors are logged and re-raised."""
+        mock_client = Mock()
+        mock_client.call.side_effect = Exception('API error')
+        mock_client_cls.return_value = mock_client
+
+        tools = AlarmRecommendationsTools()
+        with pytest.raises(Exception, match='API error'):
+            await tools.generate_alarm_recommendations_for_account(mock_context)
+
+        mock_context.error.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('awslabs.cloudwatch_mcp_server.alarm_recommendations.tools.AlarmRecommendationsClient')
+    async def test_with_profile_and_region(self, mock_client_cls, mock_context):
+        """Test that profile and region are passed to the client."""
+        mock_client = Mock()
+        mock_client.call.return_value = {'status': 'IN_PROGRESS'}
+        mock_client_cls.return_value = mock_client
+
+        tools = AlarmRecommendationsTools()
+        await tools.generate_alarm_recommendations_for_account(
+            mock_context, region='eu-west-1', profile_name='my-profile'
+        )
+
+        mock_client_cls.assert_called_once_with(profile_name='my-profile')
+
+
+class TestOnboardAlarmRecommendations:
+    """Test cases for onboard_alarm_recommendations_for_account tool."""
+
+    @pytest.mark.asyncio
+    @patch('awslabs.cloudwatch_mcp_server.alarm_recommendations.tools.AlarmRecommendationsClient')
+    async def test_success(self, mock_client_cls, mock_context):
+        """Test successful account onboarding."""
+        mock_client = Mock()
+        mock_client.call.return_value = {
+            'accountId': '123456789012',
+            'onboardedAt': 1772503246.0,
+        }
+        mock_client_cls.return_value = mock_client
+
+        tools = AlarmRecommendationsTools()
+        result = await tools.onboard_alarm_recommendations_for_account(mock_context)
+
+        assert isinstance(result, OnboardAccountResponse)
+        assert result.account_id == '123456789012'
+        assert result.onboarded_at == 1772503246.0
+        mock_client.call.assert_called_once_with('OnboardAccount', {})
+
+    @pytest.mark.asyncio
+    @patch('awslabs.cloudwatch_mcp_server.alarm_recommendations.tools.AlarmRecommendationsClient')
+    async def test_error_handling(self, mock_client_cls, mock_context):
+        """Test that errors are logged and re-raised."""
+        mock_client = Mock()
+        mock_client.call.side_effect = Exception('API error')
+        mock_client_cls.return_value = mock_client
+
+        tools = AlarmRecommendationsTools()
+        with pytest.raises(Exception, match='API error'):
+            await tools.onboard_alarm_recommendations_for_account(mock_context)
+
+        mock_context.error.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('awslabs.cloudwatch_mcp_server.alarm_recommendations.tools.AlarmRecommendationsClient')
+    async def test_with_profile_and_region(self, mock_client_cls, mock_context):
+        """Test that profile and region are passed to the client."""
+        mock_client = Mock()
+        mock_client.call.return_value = {
+            'accountId': '123456789012',
+            'onboardedAt': 1772503246.0,
+        }
+        mock_client_cls.return_value = mock_client
+
+        tools = AlarmRecommendationsTools()
+        await tools.onboard_alarm_recommendations_for_account(
+            mock_context, region='eu-west-1', profile_name='my-profile'
+        )
+
+        mock_client_cls.assert_called_once_with(profile_name='my-profile')
+
+
+class TestApplyAlarmRecommendation:
+    """Test cases for apply_alarm_recommendation_for_account tool."""
+
+    @pytest.mark.asyncio
+    @patch('awslabs.cloudwatch_mcp_server.alarm_recommendations.tools.AlarmRecommendationsClient')
+    async def test_accept(self, mock_client_cls, mock_context):
+        """Test accepting a recommendation."""
+        mock_client = Mock()
+        mock_client.call.return_value = {
+            'recommendationId': 'rec-1',
+            'state': 'ACCEPTED',
+        }
+        mock_client_cls.return_value = mock_client
+
+        tools = AlarmRecommendationsTools()
+        result = await tools.apply_alarm_recommendation_for_account(
+            mock_context, recommendation_id='rec-1', state='ACCEPTED'
+        )
+
+        assert isinstance(result, ApplyAlarmRecommendationResponse)
+        assert result.recommendation_id == 'rec-1'
+        assert result.state == 'ACCEPTED'
+        mock_client.call.assert_called_once_with(
+            'ApplyRecommendation',
+            {'recommendationId': 'rec-1', 'state': 'ACCEPTED'},
+        )
+
+    @pytest.mark.asyncio
+    @patch('awslabs.cloudwatch_mcp_server.alarm_recommendations.tools.AlarmRecommendationsClient')
+    async def test_dismiss(self, mock_client_cls, mock_context):
+        """Test dismissing a recommendation."""
+        mock_client = Mock()
+        mock_client.call.return_value = {
+            'recommendationId': 'rec-1',
+            'state': 'DISMISSED',
+        }
+        mock_client_cls.return_value = mock_client
+
+        tools = AlarmRecommendationsTools()
+        result = await tools.apply_alarm_recommendation_for_account(
+            mock_context, recommendation_id='rec-1', state='DISMISSED'
+        )
+
+        assert result.state == 'DISMISSED'
+
+    @pytest.mark.asyncio
+    async def test_invalid_state(self, mock_context):
+        """Test that invalid state raises ValueError before API call."""
+        tools = AlarmRecommendationsTools()
+        with pytest.raises(ValueError, match='ACCEPTED.*DISMISSED'):
+            await tools.apply_alarm_recommendation_for_account(
+                mock_context, recommendation_id='rec-1', state='EDITED'
+            )
+
+    @pytest.mark.asyncio
+    @patch('awslabs.cloudwatch_mcp_server.alarm_recommendations.tools.AlarmRecommendationsClient')
+    async def test_error_handling(self, mock_client_cls, mock_context):
+        """Test that errors are logged and re-raised."""
+        mock_client = Mock()
+        mock_client.call.side_effect = Exception('API error')
+        mock_client_cls.return_value = mock_client
+
+        tools = AlarmRecommendationsTools()
+        with pytest.raises(Exception, match='API error'):
+            await tools.apply_alarm_recommendation_for_account(
+                mock_context, recommendation_id='rec-1', state='ACCEPTED'
+            )
+
+        mock_context.error.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('awslabs.cloudwatch_mcp_server.alarm_recommendations.tools.AlarmRecommendationsClient')
+    async def test_with_profile_and_region(self, mock_client_cls, mock_context):
+        """Test that profile and region are passed to the client."""
+        mock_client = Mock()
+        mock_client.call.return_value = {
+            'recommendationId': 'rec-1',
+            'state': 'ACCEPTED',
+        }
+        mock_client_cls.return_value = mock_client
+
+        tools = AlarmRecommendationsTools()
+        await tools.apply_alarm_recommendation_for_account(
+            mock_context,
+            recommendation_id='rec-1',
+            state='ACCEPTED',
+            region='eu-west-1',
+            profile_name='my-profile',
+        )
+
+        mock_client_cls.assert_called_once_with(profile_name='my-profile')
