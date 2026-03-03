@@ -14,6 +14,7 @@
 
 """awslabs cloudwatch MCP Server implementation."""
 
+from awslabs.cloudwatch_mcp_server.alarm_recommendations.tools import AlarmRecommendationsTools
 from awslabs.cloudwatch_mcp_server.cloudwatch_alarms.tools import CloudWatchAlarmsTools
 from awslabs.cloudwatch_mcp_server.cloudwatch_logs.tools import CloudWatchLogsTools
 from awslabs.cloudwatch_mcp_server.cloudwatch_metrics.tools import CloudWatchMetricsTools
@@ -41,6 +42,9 @@ try:
     cloudwatch_alarms_tools = CloudWatchAlarmsTools()
     cloudwatch_alarms_tools.register(mcp)
     logger.info('CloudWatch Alarms tools registered successfully')
+    alarm_recommendations_tools = AlarmRecommendationsTools()
+    alarm_recommendations_tools.register(mcp)
+    logger.info('Alarm Recommendations tools registered successfully')
 except Exception as e:
     logger.error(f'Error initializing CloudWatch tools: {str(e)}')
     raise
