@@ -22,9 +22,11 @@ from os import getenv
 from urllib.request import Request, urlopen
 
 
-BASE_URL = 'https://dd4cc20d3b.execute-api.us-west-2.amazonaws.com/alpha'
+BASE_URL = getenv('ALARM_RECOMMENDATIONS_BASE_URL')
+if not BASE_URL:
+    raise ValueError('ALARM_RECOMMENDATIONS_BASE_URL environment variable must be set')
 SIGNING_SERVICE = 'awsalarmkorerecommendations'
-SIGNING_REGION = 'us-west-2'
+SIGNING_REGION = getenv('ALARM_RECOMMENDATIONS_SIGNING_REGION', 'us-east-1')
 
 
 class AlarmRecommendationsClient:

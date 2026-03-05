@@ -52,7 +52,7 @@ class TestAlarmRecommendationsClient:
             client.call('GetAlarmRecommendations', {})
 
             mock_auth_cls.assert_called_once_with(
-                mock_creds, 'awsalarmkorerecommendations', 'us-west-2'
+                mock_creds, 'awsalarmkorerecommendations', 'us-east-1'
             )
             mock_auth.add_auth.assert_called_once()
 
